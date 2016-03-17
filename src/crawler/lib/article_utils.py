@@ -23,12 +23,11 @@ def extract_id(entry, keys=[('link', 'link')], force_id=False):
                                    if entry_key in entry).encode('utf8'))
     else:
         ids = {}
-        for entry_key, pyagg_key in keys:
-            if entry_key in entry and pyagg_key not in ids:
-                ids[pyagg_key] = entry[entry_key]
-                if 'date' in pyagg_key:
-                    ids[pyagg_key] = dateutil.parser.parse(ids[pyagg_key])\
-                                                    .isoformat()
+        for entry_key, key in keys:
+            if entry_key in entry and key not in ids:
+                ids[key] = entry[entry_key]
+                if 'date' in key:
+                    ids[key] = dateutil.parser.parse(ids[key]).isoformat()
         return ids
 
 

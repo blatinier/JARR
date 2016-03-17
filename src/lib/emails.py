@@ -27,21 +27,8 @@ from email.mime.text import MIMEText
 from postmark import PMMail
 
 import conf
-from web.decorators import async
 
 logger = logging.getLogger(__name__)
-
-
-@async
-def send_async_email(mfrom, mto, msg):
-    try:
-        s = smtplib.SMTP(conf.NOTIFICATION_HOST)
-        s.login(conf.NOTIFICATION_USERNAME, conf.NOTIFICATION_PASSWORD)
-    except Exception:
-        logger.exception('send_async_email raised:')
-    else:
-        s.sendmail(mfrom, mto, msg.as_string())
-        s.quit()
 
 
 def send(*args, **kwargs):
