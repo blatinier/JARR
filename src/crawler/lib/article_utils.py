@@ -47,7 +47,7 @@ def construct_article(entry, feed):
     content = get_article_content(entry)
 
     article_link = entry.get('link')
-    if conf.RESOLVE_ARTICLE_URL and article_link:
+    if conf.CRAWLER_RESOLV and article_link:
         try:
             # resolves URL behind proxies
             # (like feedproxy.google.com)

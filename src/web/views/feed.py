@@ -125,7 +125,7 @@ def bookmarklet():
               'warning')
     feed = feed_contr.create(**feed)
     flash(gettext('Feed was successfully created.'), 'success')
-    if feed.enabled and conf.CRAWLING_METHOD == "classic":
+    if feed.enabled and conf.CRAWLER_TYPE == "classic":
         utils.fetch(current_user.id, feed.id)
         flash(gettext("Downloading articles for the new feed..."), 'info')
     return redirect(url_for('feed.form', feed_id=feed.id))
@@ -214,7 +214,7 @@ def process_form(feed_id=None):
     flash(gettext('Feed %(feed_title)r successfully created.',
                   feed_title=new_feed.title), 'success')
 
-    if conf.CRAWLING_METHOD == "classic":
+    if conf.CRAWLER_TYPE == "classic":
         utils.fetch(current_user.id, new_feed.id)
         flash(gettext("Downloading articles for the new feed..."), 'info')
 

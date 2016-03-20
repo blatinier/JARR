@@ -10,14 +10,12 @@ from web.lib.utils import clear_string
 
 logger = logging.getLogger(__name__)
 DEFAULT_LIMIT = 5
-DEFAULT_REFRESH_RATE = 60
-DEFAULT_MAX_ERROR = conf.DEFAULT_MAX_ERROR
 
 
 class FeedController(AbstractController):
     _db_cls = Feed
 
-    def list_late(self, max_last, max_error=DEFAULT_MAX_ERROR,
+    def list_late(self, max_last, max_error=conf.FEED_ERROR_MAX,
                   limit=DEFAULT_LIMIT):
         return [feed for feed in self.read(
                             error_count__lt=max_error, enabled=True,
@@ -26,8 +24,8 @@ class FeedController(AbstractController):
                                 .order_by('last_retrieved')
                                 .limit(limit)]
 
-    def list_fetchable(self, max_error=DEFAULT_MAX_ERROR,
-            limit=DEFAULT_LIMIT, refresh_rate=DEFAULT_REFRESH_RATE):
+    def list_fetchable(self, max_error=conf.FEED_ERROR_MAX,
+            limit=DEFAULT_LIMIT, refresh_rate=conf.FEED_REFRESH_RATE):
         now = datetime.now()
         max_last = now - timedelta(minutes=refresh_rate)
         feeds = self.list_late(max_last, max_error, limit)

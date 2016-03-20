@@ -1,8 +1,131 @@
 #!/usr/bin/env python3
 import random
 import os.path
-from sys import stderr
+import logging
+from sys import argv, stderr
 from collections import defaultdict
+
+
+ABS_CHOICES = {'yes': True, 'y': True, 'no': False, 'n': False}
+REQUIREMENTS = ['aiohttp==0.21.0',
+                'alembic==0.8.4',
+                'beautifulsoup4==4.4.1',
+                'feedparser==5.2.1',
+                'Flask==0.10.1',
+                'Flask-Babel==0.9',
+                'Flask-Login==0.3.2',
+                'Flask-Migrate==1.7.0',
+                'Flask-Principal==0.4.0',
+                'Flask-RESTful==0.3.5',
+                'Flask-Script==2.0.5',
+                'Flask-SQLAlchemy==2.1',
+                'Flask-SSLify==0.1.5',
+                'Flask-WTF==0.12',
+                'lxml==3.5.0',
+                'opml==0.5',
+                'python-dateutil==2.4.2',
+                'python-postmark==0.4.7',
+                'rauth==0.7.2',
+                'requests==2.9.1',
+                'requests-futures==0.9.5',
+                'SQLAlchemy==1.0.11',
+                'WTForms==2.1',
+                ]
+POSTGRES_REQ = 'psycopg2==2.6.1'
+DEV_REQUIREMENTS = ['pep8', 'coverage', 'coveralls']
+SECTIONS = (
+        {'options': [
+            {'key': 'API_ROOT', 'default': '/api/v2.0', 'edit': False},
+            {'key': 'LANGUAGES', 'edit': False,
+                'default': {'en': 'English', 'fr': 'French'}},
+            {'key': 'TIME_ZONE', 'edit': False,
+                'default': {'en': 'US/Eastern', 'fr': 'Europe/Paris'}},
+
+            {'key': 'PLATFORM_URL', 'default': 'http://0.0.0.0:5000/',
+                'ask': 'At what address will your installation of JARR '
+                       'be available'},
+            {'key': 'SQLALCHEMY_DATABASE_URI',
+                'ask': 'Enter the database URI',
+                'default': 'postgres://127.0.0.1:5432/jarr',
+                'test': 'sqlite:///:memory:'},
+            {'key': 'SQLALCHEMY_TRACK_MODIFICATIONS',
+                'edit': False, 'default=': True, 'type': bool},
+            {'key': 'SECRET_KEY', 'edit': False,
+                'default': str(random.getrandbits(128))},
+            {'key': 'ON_HEROKU', 'edit': False, 'default': True, 'type': bool},
+        ]},
+        {'prefix': 'LOG', 'edit': False, 'options': [
+            {'key': 'LEVEL', 'default': 'warn', 'test': 'debug',
+                'choices': ('debug', 'info', 'warn', 'error', 'fatal')},
+            {'key': 'TYPE', 'default': ''},
+            {'key': 'PATH', 'default': ''},
+        ]},
+        {'prefix': 'CRAWLER', 'edit': False, 'options': [
+            {'key': 'LOGIN', 'default': 'admin'},
+            {'key': 'PASSWD', 'default': 'admin'},
+            {'key': 'NBWORKER', 'type': int, 'default': 2, 'test': 1},
+            {'key': 'TYPE', 'default': 'http', 'edit': False},
+            {'key': 'RESOLV', 'type': bool, 'default': False,
+                'choices': ABS_CHOICES, 'edit': False},
+            {'key': 'USER_AGENT',
+                'edit': False, 'default': 'https://github.com/jaesivsm/JARR'},
+        ]},
+        {'prefix': 'PLUGINS', 'options': [
+            {'key': 'READABILITY_KEY', 'default': '',
+                'ask': 'Enter your readability key if you have one'},
+        ]},
+        {'prefix': 'AUTH', 'options': [
+            {'key': 'ALLOW_SIGNUP', 'default': 'yes', 'type': bool,
+                'choices': ABS_CHOICES,
+                'ask': 'Do you want to allow people to create account'},
+            {'key': 'RECAPTCHA_USE_SSL', 'default': True, 'edit': False},
+            {'key': 'RECAPTCHA_PUBLIB_KEY', 'default': '',
+                'ask': 'If you have a recaptcha public key enter it'},
+            {'key': 'RECAPTCHA_PRIVATE_KEY', 'default': '',
+                'ask': 'If you have a recaptcha private key enter it'},
+        ]},
+        {'prefix': 'OAUTH',
+         'ask': 'Do you want to configure third party OAUTH provider',
+         'options': [
+            {'key': 'ALLOW_SIGNUP', 'default': 'yes', 'type': bool,
+                'choices': ABS_CHOICES,
+                'ask': 'Do you want to allow people to create account through '
+                       'third party OAUTH provider'},
+            {'key': 'TWITTER_ID', 'default': '',
+                'ask': 'Enter your twitter id if you have one'},
+            {'key': 'TWITTER_SECRET', 'default': '',
+                'ask': 'Enter your twitter secret if you have one'},
+            {'key': 'FACEBOOK_ID', 'default': '',
+                'ask': 'Enter your facebook id if you have one'},
+            {'key': 'FACEBOOK_SECRET', 'default': '',
+                'ask': 'Enter your facebook secret if you have one'},
+            {'key': 'GOOGLE_ID', 'default': '',
+                'ask': 'Enter your google id if you have one'},
+            {'key': 'GOOGLE_SECRET', 'default': '',
+                'ask': 'Enter your google secret if you have one'},
+        ]},
+        {'prefix': 'NOTIFICATION', 'edit': False, 'options': [
+            {'key': 'EMAIL', 'default': ''},
+            {'key': 'HOST', 'default': 'smtp.googlemail.com'},
+            {'key': 'STARTTLS', 'type': bool,
+                'default': 'yes', 'choices': ABS_CHOICES},
+            {'key': 'PORT', 'type': int, 'default': 587},
+            {'key': 'LOGIN', 'default': ''},
+            {'key': 'PASSWORD', 'default': ''},
+        ]},
+
+        {'prefix': 'FEED', 'edit': False, 'options': [
+            {'key': 'ERROR_MAX', 'type': int, 'default': 6, 'edit': False},
+            {'key': 'ERROR_THRESHOLD',
+                'type': int, 'default': 3, 'edit': False},
+            {'key': 'REFRESH_RATE',
+                'default': 60, 'type': int, 'edit': False},
+        ]},
+        {'prefix': 'WEBSERVER', 'edit': False, 'options': [
+            {'key': 'HOST', 'default': '0.0.0.0', 'edit': False},
+            {'key': 'PORT', 'default': 5000, 'type': int, 'edit': False},
+        ]},
+)
 
 
 def title(text):
@@ -42,90 +165,63 @@ def ask(text, choices=[], default=None, cast=None):
             return result
 
 
-def parse_requirements(filename):
-    with open(filename) as fd:
-        for line in fd.readlines():
-            yield line.strip()
+def build_conf(values, test=False):
+    for section in SECTIONS:
+        section_edit = section.get('edit', True)
+        if not test and section_edit and 'ask' in section:
+            print()
+            section_edit = ask(section['ask'],
+                    choices=ABS_CHOICES, default='no')
+        if not test and section_edit and section.get('prefix'):
+            title(section['prefix'])
+        if section.get('prefix'):
+            yield '\n'
+            yield '# %s\n' % section['prefix']
+        for option in section['options']:
+            edit = section_edit and option.get('edit', True)
+            if test and 'test' in option:
+                default = option['test']
+            else:
+                default = option.get('default')
+            name = section.get('prefix', '')
+            if name:
+                name += '_'
+            name += option['key']
+            if edit and not test:
+                value = ask(option['ask'], choices=option.get('choices', []),
+                            default=default)
+            else:
+                value = default
+            if 'type' in option:
+                value = option['type'](value)
+            values[name] = value
+            yield '%s = %r\n' % (name, value)
 
 
-def install_python_deps():
+def write_conf(conf):
+    with open('./src/conf.py', 'w') as fd:
+        fd.writelines(conf)
+
+
+def install_python_deps(test, install_postgres):
     try:
         import pip
     except ImportError:
         print('pip is not available ; aborting', file=stderr)
-    pip.main(['install', '--upgrade']
-             + list(parse_requirements('../requirements.txt')))
+
+    pip.main(['install', '--upgrade'] + REQUIREMENTS)
+    if install_postgres:
+        pip.main(['install', '--upgrade', POSTGRES_REQ])
+    if test:
+        pip.main(['install', '--upgrade'] + DEV_REQUIREMENTS)
 
 
-def build_conf():
-    def defaultdict_factory():
-        return defaultdict(defaultdict_factory)
-    conf = defaultdict(defaultdict_factory,
-            {'web': {'secret': random.getrandbits(128)},
-             'default_max_error': 6, 'error_threshold': 3,
-             'crawler': {'nb_worker': 6,
-                         'user_agent': 'https://github.com/jaesivsm/JARR'}})
-    abs_choices = {'yes': True, 'y': True, 'no': False, 'n': False}
-
-    title('Basic configuration')
-    conf['url'] = ask('What will be the url', default='http://0.0.0.0:5000')
-    adm_login = conf['crawler']['login'] = ask('Your admin login')
-    adm_pass = conf['crawler']['password'] = ask('Your admin password')
-    conf['logpath'] = ask('Logpath (empty will mean Syslog)', default='')
-
-    title('Configuration of the web application')
-    conf['web']['self_registration'] = ask('Do you allow auto registration',
-                                           choices=abs_choices, default='no')
-    db_type = ask('What kind of db engine will you use',
-                  choices=['sqlite', 'postgresql'], default='sqlite')
-    if db_type == 'postgresql':
-        db_addr = ask('Enter db address', default='127.0.0.1')
-        db_port = ask('Enter db port', default=5432, cast=int)
-        db_name = ask('Enter db name')
-        db_login = ask('Enter db login')
-        db_passwd = ask('Enter db password')
-        conf['database'] = 'postgres://%s:%s@%s:%s/%s' % (db_login, db_passwd,
-                db_addr, db_port, db_name)
-    else:
-        db_loc = ask('Enter db location', default='jarr.db')
-        conf['database'] = "sqlite+pysqlite://%s" % os.path.abspath(db_loc)
-
-    title('Sign up options')
-    conf['plugins']['recaptcha_pub'] = ask('Recaptcha public key', default='')
-    conf['plugins']['recaptcha_private'] \
-            = ask('Recaptcha private key', default='')
-    if ask('Do you have a readability API key', abs_choices, default='no'):
-        conf['plugins']['readability'] = ask('Enter your key')
-    for plugin in ['google', 'twitter', 'facebook']:
-        if ask('Do you have a %s API key' % plugin.capitalize(),
-                abs_choices, default='no'):
-            conf['plugins'][plugin]['id'] = ask('Id')
-            conf['plugins'][plugin]['secret'] = ask('Secret')
-    title('Notifications configuration')
-    conf['notifications']['email'] \
-            = ask("The mail with which we'll send (few) nofitications")
-    conf['notifications']['password'] = ask("The smtp password")
-    conf['notifications']['host'] = ask("The host",
-            default="smtp.googlemail.com")
-    conf['notifications']['port'] = ask("The port", default=587, cast=int)
-    conf['notifications']['starttls'] = ask("Use starttls",
-            choices=abs_choices, default='yes')
-
-    if ask('Do you want to configure more advanced options ?',
-            choices=abs_choices, default='no'):
-        conf['default_max_error'] = ask('How many errors should the '
-                'fetching of a field encounters before desactivating it',
-                default=conf['default_max_error'], cast=int)
-        conf['error_threshold'] = ask('How many errors before marking it as '
-                '"in error" to the user',
-                default=int(conf['default_max_error'] / 2), cast=int)
-        conf['crawler']['nb_worker'] = ask('How many threads should the '
-                'crawler use', default=conf['crawler']['nb_worker'])
-    print(repr(conf))
-    import ipdb
-    ipdb.set_trace()
-    return conf
+def main():
+    values, test = {}, '--test' in argv
+    write_conf(build_conf(values, test))
+    install_postgres = 'postgres' in values['SQLALCHEMY_DATABASE_URI']
+    install_python_deps(test, install_postgres)
 
 
 if __name__ == '__main__':
-    build_conf()
+    main()
