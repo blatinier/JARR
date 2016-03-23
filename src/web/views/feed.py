@@ -1,7 +1,5 @@
 import logging
 import requests.exceptions
-from datetime import datetime, timedelta
-from sqlalchemy import desc
 from werkzeug.exceptions import BadRequest
 
 from flask import Blueprint, render_template, flash, \
