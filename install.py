@@ -74,12 +74,14 @@ def ask(text, choices=[], default=None, cast=None):
 
 
 def build_conf(test=False):
-    try:
-        import conf
-        could_import_conf = True
-    except ImportError:
-        conf = None
-        could_import_conf = False
+    conf = None
+    could_import_conf = False
+    if not test:
+        try:
+            import conf
+            could_import_conf = True
+        except ImportError:
+            pass
 
     for section in conf_handling.SECTIONS:
         section_edit = section.get('edit', True)

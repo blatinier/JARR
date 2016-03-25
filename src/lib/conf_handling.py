@@ -111,7 +111,7 @@ def write_conf(conf_gen):
             if current_section != section and section:
                 fd.write('\n# %s\n' % section.upper())
             current_section = section
-            fd.write('%s = %r\n' % (key, section))
+            fd.write('%s = %r\n' % (key, value))
 
 
 def rewrite(new_conf):
