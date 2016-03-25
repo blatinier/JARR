@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-import random
-import os.path
-import logging
-from sys import argv, stderr
-from collections import defaultdict
+import os
+import imp
+from sys import argv, stderr, path
+root = os.path.join(os.path.dirname(globals()['__file__']), 'src/')
+path.append(root)
+
+from lib import conf_handling
 
 
-ABS_CHOICES = {'yes': True, 'y': True, 'no': False, 'n': False}
 REQUIREMENTS = ['aiohttp==0.21.0',
                 'alembic==0.8.4',
                 'beautifulsoup4==4.4.1',
@@ -33,99 +34,6 @@ REQUIREMENTS = ['aiohttp==0.21.0',
                 ]
 POSTGRES_REQ = 'psycopg2==2.6.1'
 DEV_REQUIREMENTS = ['pep8', 'coverage', 'coveralls']
-SECTIONS = (
-        {'options': [
-            {'key': 'API_ROOT', 'default': '/api/v2.0', 'edit': False},
-            {'key': 'LANGUAGES', 'edit': False,
-                'default': {'en': 'English', 'fr': 'French'}},
-            {'key': 'TIME_ZONE', 'edit': False,
-                'default': {'en': 'US/Eastern', 'fr': 'Europe/Paris'}},
-
-            {'key': 'PLATFORM_URL', 'default': 'http://0.0.0.0:5000/',
-                'ask': 'At what address will your installation of JARR '
-                       'be available'},
-            {'key': 'SQLALCHEMY_DATABASE_URI',
-                'ask': 'Enter the database URI',
-                'default': 'postgres://127.0.0.1:5432/jarr',
-                'test': 'sqlite:///:memory:'},
-            {'key': 'SQLALCHEMY_TRACK_MODIFICATIONS',
-                'edit': False, 'default=': True, 'type': bool},
-            {'key': 'SECRET_KEY', 'edit': False,
-                'default': str(random.getrandbits(128))},
-            {'key': 'ON_HEROKU', 'edit': False, 'default': True, 'type': bool},
-        ]},
-        {'prefix': 'LOG', 'edit': False, 'options': [
-            {'key': 'LEVEL', 'default': 'warn', 'test': 'debug',
-                'choices': ('debug', 'info', 'warn', 'error', 'fatal')},
-            {'key': 'TYPE', 'default': ''},
-            {'key': 'PATH', 'default': ''},
-        ]},
-        {'prefix': 'CRAWLER', 'edit': False, 'options': [
-            {'key': 'LOGIN', 'default': 'admin'},
-            {'key': 'PASSWD', 'default': 'admin'},
-            {'key': 'NBWORKER', 'type': int, 'default': 2, 'test': 1},
-            {'key': 'TYPE', 'default': 'http', 'edit': False},
-            {'key': 'RESOLV', 'type': bool, 'default': False,
-                'choices': ABS_CHOICES, 'edit': False},
-            {'key': 'USER_AGENT',
-                'edit': False, 'default': 'https://github.com/jaesivsm/JARR'},
-        ]},
-        {'prefix': 'PLUGINS', 'options': [
-            {'key': 'READABILITY_KEY', 'default': '',
-                'ask': 'Enter your readability key if you have one'},
-        ]},
-        {'prefix': 'AUTH', 'options': [
-            {'key': 'ALLOW_SIGNUP', 'default': 'yes', 'type': bool,
-                'choices': ABS_CHOICES,
-                'ask': 'Do you want to allow people to create account'},
-            {'key': 'RECAPTCHA_USE_SSL', 'default': True, 'edit': False},
-            {'key': 'RECAPTCHA_PUBLIB_KEY', 'default': '',
-                'ask': 'If you have a recaptcha public key enter it'},
-            {'key': 'RECAPTCHA_PRIVATE_KEY', 'default': '',
-                'ask': 'If you have a recaptcha private key enter it'},
-        ]},
-        {'prefix': 'OAUTH',
-         'ask': 'Do you want to configure third party OAUTH provider',
-         'options': [
-            {'key': 'ALLOW_SIGNUP', 'default': 'yes', 'type': bool,
-                'choices': ABS_CHOICES,
-                'ask': 'Do you want to allow people to create account through '
-                       'third party OAUTH provider'},
-            {'key': 'TWITTER_ID', 'default': '',
-                'ask': 'Enter your twitter id if you have one'},
-            {'key': 'TWITTER_SECRET', 'default': '',
-                'ask': 'Enter your twitter secret if you have one'},
-            {'key': 'FACEBOOK_ID', 'default': '',
-                'ask': 'Enter your facebook id if you have one'},
-            {'key': 'FACEBOOK_SECRET', 'default': '',
-                'ask': 'Enter your facebook secret if you have one'},
-            {'key': 'GOOGLE_ID', 'default': '',
-                'ask': 'Enter your google id if you have one'},
-            {'key': 'GOOGLE_SECRET', 'default': '',
-                'ask': 'Enter your google secret if you have one'},
-        ]},
-        {'prefix': 'NOTIFICATION', 'edit': False, 'options': [
-            {'key': 'EMAIL', 'default': ''},
-            {'key': 'HOST', 'default': 'smtp.googlemail.com'},
-            {'key': 'STARTTLS', 'type': bool,
-                'default': 'yes', 'choices': ABS_CHOICES},
-            {'key': 'PORT', 'type': int, 'default': 587},
-            {'key': 'LOGIN', 'default': ''},
-            {'key': 'PASSWORD', 'default': ''},
-        ]},
-
-        {'prefix': 'FEED', 'edit': False, 'options': [
-            {'key': 'ERROR_MAX', 'type': int, 'default': 6, 'edit': False},
-            {'key': 'ERROR_THRESHOLD',
-                'type': int, 'default': 3, 'edit': False},
-            {'key': 'REFRESH_RATE',
-                'default': 60, 'type': int, 'edit': False},
-        ]},
-        {'prefix': 'WEBSERVER', 'edit': False, 'options': [
-            {'key': 'HOST', 'default': '0.0.0.0', 'edit': False},
-            {'key': 'PORT', 'default': 5000, 'type': int, 'edit': False},
-        ]},
-)
 
 
 def title(text):
@@ -165,28 +73,35 @@ def ask(text, choices=[], default=None, cast=None):
             return result
 
 
-def build_conf(values, test=False):
-    for section in SECTIONS:
+def build_conf(test=False):
+    try:
+        import conf
+        could_import_conf = True
+    except ImportError:
+        conf = None
+        could_import_conf = False
+
+    for section in conf_handling.SECTIONS:
         section_edit = section.get('edit', True)
         if not test and section_edit and 'ask' in section:
             print()
             section_edit = ask(section['ask'],
-                    choices=ABS_CHOICES, default='no')
-        if not test and section_edit and section.get('prefix'):
-            title(section['prefix'])
-        if section.get('prefix'):
-            yield '\n'
-            yield '# %s\n' % section['prefix']
+                    choices=conf_handling.ABS_CHOICES, default='no')
+        prefix = section.get('prefix', '')
+        if not test and section_edit and prefix:
+            title(prefix)
         for option in section['options']:
             edit = section_edit and option.get('edit', True)
+
+            name = conf_handling.get_key(section, option)
+
             if test and 'test' in option:
                 default = option['test']
+            elif could_import_conf and hasattr(conf, name):
+                default = getattr(conf, name)
             else:
                 default = option.get('default')
-            name = section.get('prefix', '')
-            if name:
-                name += '_'
-            name += option['key']
+
             if edit and not test:
                 value = ask(option['ask'], choices=option.get('choices', []),
                             default=default)
@@ -194,13 +109,7 @@ def build_conf(values, test=False):
                 value = default
             if 'type' in option:
                 value = option['type'](value)
-            values[name] = value
-            yield '%s = %r\n' % (name, value)
-
-
-def write_conf(conf):
-    with open('./src/conf.py', 'w') as fd:
-        fd.writelines(conf)
+            yield prefix, name, value
 
 
 def install_python_deps(test, install_postgres):
@@ -217,9 +126,11 @@ def install_python_deps(test, install_postgres):
 
 
 def main():
-    values, test = {}, '--test' in argv
-    write_conf(build_conf(values, test))
-    install_postgres = 'postgres' in values['SQLALCHEMY_DATABASE_URI']
+    test = '--test' in argv
+    conf_handling.write_conf(build_conf(test))
+    import conf
+    imp.reload(conf)
+    install_postgres = 'postgres' in conf.SQLALCHEMY_DATABASE_URI
     install_python_deps(test, install_postgres)
 
 
